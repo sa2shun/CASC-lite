@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.env
+.venv
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+ruff_cache/
+
+# Data and results
+results/
+*.csv
+*.tsv
+*.log
+*.jsonl.gz
+*.png
+*.pdf
+
+# Local configs
+.envrc
+*.ipynb_checkpoints
+
+# Project-specific exclusions
+research_proposal.txt
+
+# Keep only the sample mini dataset
+data/**
+!data/
+!data/gsm8k_mini.jsonl
+
+# Misc
+.DS_Store

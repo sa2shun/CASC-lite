@@ -1,0 +1,19 @@
+model: meta-llama/Meta-Llama-3-8B-Instruct
+backend: hf_transformers
+seed: 42
+K: 32
+a: 1.3
+b: 2.0
+T: 0.7
+beta: 1.0
+max_new_tokens: 256
+min_new_tokens: 1
+top_p: 0.9
+top_k: null
+n_candidates: [1, 3, 5]
+mode: adaptive
+data: data/gsm8k_mini.jsonl
+output_dir: results
+entropy_window: 32
+retry_on_error: 1
+log_level: INFO
