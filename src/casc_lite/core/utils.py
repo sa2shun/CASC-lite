@@ -43,6 +43,10 @@ class ExperimentConfig:
     retry_on_error: int = 1
     log_level: str = "INFO"
     device: Optional[str] = None
+    prompt_template: Optional[str] = (
+        "You are a helpful math tutor. Solve the following problem step by step "
+        "and provide only the final numeric answer.\n\nQuestion: {question}\nAnswer:"
+    )
 
 
 def _coerce_optional(value: Any) -> Any:
@@ -102,6 +106,9 @@ def load_config(path: str | Path | None, overrides: Dict[str, Any] | None = None
 
     if base.get("n_fixed") is not None:
         base["n_fixed"] = int(base["n_fixed"])
+
+    if base.get("prompt_template") is not None:
+        base["prompt_template"] = str(base["prompt_template"])
 
     config = ExperimentConfig(**base)
     return config

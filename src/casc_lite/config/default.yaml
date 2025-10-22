@@ -17,3 +17,8 @@ output_dir: results
 entropy_window: 32
 retry_on_error: 1
 log_level: INFO
+prompt_template: |
+  You are a helpful math tutor. Solve the following problem step by step and provide only the final numeric answer.
+  
+  Question: {question}
+  Answer:

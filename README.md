@@ -8,6 +8,7 @@ CASC-lite reproduces the study on dynamically adjusting self-consistency sample 
 - **Deterministic runs:** Unified seeding across `random`, NumPy, and PyTorch with cuDNN determinism toggles.
 - **Comprehensive logging:** CSV artifacts for per-example results and aggregate summaries, plus optional JSON dumps of raw completions.
 - **Reproducible analysis:** Export accuracy–latency scatter plots and Pareto fronts directly from aggregated CSV outputs.
+- **Prompt templating:** Default GSM8K runs wrap each question in an instruction template so models respond with a numeric answer; override `prompt_template` in the config to customize wording.
 
 ## Repository Layout
 ```
@@ -86,6 +87,7 @@ Hyper-parameters live in `src/casc_lite/config/default.yaml`. Every CLI flag ove
 - `max_new_tokens`, `min_new_tokens`: generation bounds
 - `output_dir`: where CSVs/plots accumulate (default `results/`)
 - `retry_on_error`: automatic retries for transient backend failures
+- `prompt_template`: instruction block prepended to each GSM8K question (use `{question}` placeholder)
 
 ## Outputs
 Running any experiment appends a row to `results/aggregate.csv` and writes detailed per-example records to `results/<run_id>_examples.csv`. Optional JSON dumps (`--save_completions`) capture raw completions with vote breakdowns. The plotting CLI consumes the aggregate CSV to produce:
