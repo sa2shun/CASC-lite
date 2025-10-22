@@ -89,3 +89,14 @@ def test_run_escalates_on_weak_consensus():
     assert result.votes["14"] == 2
     # No majority reached, but top choice should be the most recent consensus candidate
     assert result.canonical_choice == "14"
+
+
+def test_fixed_mode_never_topups():
+    responses = ["A", "B", "C"]
+    backend = DummyBackend(entropy_values=[0.2], response_sets=[responses])
+    config = make_config(mode="fixed", n_fixed=3, n_candidates=[3])
+    sampler = AdaptiveSampler(backend, config)
+    result = sampler.run("Question")
+
+    assert result.n_used == 3
+    assert backend._response_sets == []
