@@ -25,7 +25,7 @@ class ExperimentConfig:
     model: str = "meta-llama/Meta-Llama-3-8B-Instruct"
     backend: str = "hf_transformers"
     seed: int = 42
-    K: int = 32
+    K: int = 8
     a: float = 1.3
     b: float = 2.0
     T: float = 0.7

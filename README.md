@@ -3,7 +3,7 @@
 CASC-lite reproduces the study on dynamically adjusting self-consistency sample counts for large language models using output entropy. This repository implements the Hugging Face Transformers backend, evaluation harness, configuration management, plotting utilities, and scripted workflows needed to replicate the experiments described in the accompanying proposal (kept out of version control).
 
 ## Key Ideas
-- **Entropy-gated sampling:** Estimate uncertainty from the first *K* generated tokens and adapt the number of self-consistency samples (\(n \in \{1,3,5\}\)). In adaptive mode the sampler tops up to the next candidate size when votes lack a majority, while fixed-*n* runs stay at their requested budget.
+- **Entropy-gated sampling:** Estimate uncertainty from the first *K* generated tokens (default \(K=8\)) and adapt the number of self-consistency samples (\(n \in \{1,3,5\}\)). In adaptive mode the sampler tops up to the next candidate size when votes lack a majority, while fixed-*n* runs stay at their requested budget. Quartile-based entropy thresholds can be derived automatically from baseline runs via `scripts/run_full_suite.sh`.
 - **Backend abstraction:** Default HF Transformers implementation with an interface ready for future vLLM integration.
 - **Deterministic runs:** Unified seeding across `random`, NumPy, and PyTorch with cuDNN determinism toggles.
 - **Comprehensive logging:** CSV artifacts for per-example results and aggregate summaries, plus optional JSON dumps of raw completions.
@@ -53,7 +53,7 @@ source .venv/bin/activate
 python -m src.casc_lite.cli.run_once \
   --model meta-llama/Meta-Llama-3-8B-Instruct \
   --data data/gsm8k_mini.jsonl \
-  --mode adaptive --K 32 --a 1.3 --b 2.0 \
+  --mode adaptive --K 8 --a 1.3 --b 2.0 \
   --T 0.7 --top_p 0.9 --save_completions
 ```
 
@@ -82,7 +82,7 @@ All commands above mirror the template provided in `scripts/run_examples.sh`, `s
 
 ## Configuration
 Hyper-parameters live in `src/casc_lite/config/default.yaml`. Every CLI flag overrides the YAML entry; alternatively pass `--n_candidates 1,3,5`, `--top_p 0.8`, etc. Key fields:
-- `K`, `a`, `b`: entropy window and thresholds
+- `K`, `a`, `b`: entropy window (default 8) and thresholds (adaptive defaults can be derived from fixed baselines)
 - `n_candidates`: allowed sample counts
 - `max_new_tokens`, `min_new_tokens`: generation bounds
 - `output_dir`: where CSVs/plots accumulate (default `results/`)
