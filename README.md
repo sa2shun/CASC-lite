@@ -3,7 +3,7 @@
 CASC-lite reproduces the study on dynamically adjusting self-consistency sample counts for large language models using output entropy. This repository implements the Hugging Face Transformers backend, evaluation harness, configuration management, plotting utilities, and scripted workflows needed to replicate the experiments described in the accompanying proposal (kept out of version control).
 
 ## Key Ideas
-- **Entropy-gated sampling:** Estimate uncertainty from the first *K* generated tokens and adapt the number of self-consistency samples (\(n \in \{1,3,5\}\)).
+- **Entropy-gated sampling:** Estimate uncertainty from the first *K* generated tokens and adapt the number of self-consistency samples (\(n \in \{1,3,5\}\)). The sampler now tops up to the next candidate size when the vote distribution lacks a majority, improving robustness without changing the core algorithm.
 - **Backend abstraction:** Default HF Transformers implementation with an interface ready for future vLLM integration.
 - **Deterministic runs:** Unified seeding across `random`, NumPy, and PyTorch with cuDNN determinism toggles.
 - **Comprehensive logging:** CSV artifacts for per-example results and aggregate summaries, plus optional JSON dumps of raw completions.
