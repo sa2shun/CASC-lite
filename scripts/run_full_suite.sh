@@ -16,13 +16,28 @@ export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 K_VALUE="${K_OVERRIDE:-8}"
 DEVICE_VALUE="${DEVICE_OVERRIDE:-cuda:0}"
 
+SUITE_STAMP="$(date +%Y%m%d_%H%M%S)"
+SUITE_BASE="${SUITE_NAME:-suite_${SUITE_STAMP}}"
+RESULTS_DIR="results/${SUITE_BASE}"
+if [[ -d "$RESULTS_DIR" ]]; then
+  suffix=1
+  while [[ -d "results/${SUITE_BASE}_${suffix}" ]]; do
+    ((suffix++))
+  done
+  RESULTS_DIR="results/${SUITE_BASE}_${suffix}"
+fi
+mkdir -p "$RESULTS_DIR"
+export CASC_SUITE_DIR="$RESULTS_DIR"
+
+echo "==> Suite output directory: $RESULTS_DIR"
+
 COMMON_ARGS=(
   --config src/casc_lite/config/default.yaml
   --data data/gsm8k_full.jsonl
   --K "$K_VALUE"
   --T 0.7 --top_p 0.9
   --max_new_tokens 128
-  --output_dir results
+  --output_dir "$RESULTS_DIR"
   --device "$DEVICE_VALUE"
 )
 
@@ -37,8 +52,9 @@ derive_quartiles() {
 import csv
 import pathlib
 import sys
+import os
 
-results_dir = pathlib.Path("results")
+results_dir = pathlib.Path(os.environ.get("CASC_SUITE_DIR", "results"))
 agg_path = results_dir / "aggregate.csv"
 if not agg_path.exists():
     sys.exit("aggregate.csv not found; run fixed baselines first")
