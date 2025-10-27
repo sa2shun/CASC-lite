@@ -18,15 +18,33 @@ class DummyBackend(BaseBackend):
         return EntropyStats(average_entropy=value, token_entropies=[value])
 
     def generate_n(self, prompt, n, *args, **kwargs):
-        responses = self._response_sets.pop(0)
-        if len(responses) != n:
-            raise AssertionError(f"Expected {n} responses, got {len(responses)}")
+        if not self._response_sets:
+            raise AssertionError("No responses configured")
+
+        collected: list[str] = []
+        remaining = n
+        while remaining > 0:
+            if not self._response_sets:
+                raise AssertionError(f"Requested {n} responses but only {len(collected)} available")
+            current = self._response_sets[0]
+            if not current:
+                self._response_sets.pop(0)
+                continue
+
+            take = min(remaining, len(current))
+            collected.extend(current[:take])
+            del current[:take]
+            remaining -= take
+
+            if not current:
+                self._response_sets.pop(0)
+
         return [
             {
                 "text": text,
                 "num_generated_tokens": len(text.split()),
             }
-            for text in responses
+            for text in collected
         ]
 
     def tokenize(self, text):

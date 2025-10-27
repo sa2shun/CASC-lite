@@ -140,6 +140,8 @@ def run_experiment(
     metrics = evaluator.aggregate()
     avg_n = sum(n_values) / len(n_values)
     avg_entropy = sum(entropies) / len(entropies)
+    correct_strict = sum(1 for example in evaluator.examples if example.correct_strict)
+    correct_normalized = sum(1 for example in evaluator.examples if example.correct_normalized)
 
     return {
         "metrics": metrics,
@@ -148,6 +150,8 @@ def run_experiment(
         "avg_entropy": avg_entropy,
         "dataset_size": len(data_records),
         "completions": completions_dump,
+        "correct_strict_count": correct_strict,
+        "correct_normalized_count": correct_normalized,
     }
 
 
@@ -252,11 +256,18 @@ def main() -> None:
     )
 
     metrics = summary["metrics"]
+    dataset_size = summary["dataset_size"]
+    strict_hits = summary["correct_strict_count"]
+    normalized_hits = summary["correct_normalized_count"]
     logger.info(
-        "Run %s complete: strict=%.3f normalized=%.3f latency=%.3fs tokens=%.2f efficiency=%.3f",
+        "Run %s complete: strict=%.3f (%d/%d) normalized=%.3f (%d/%d) latency=%.3fs tokens=%.2f efficiency=%.3f",
         run_id,
         metrics.accuracy_strict,
+        strict_hits,
+        dataset_size,
         metrics.accuracy_normalized,
+        normalized_hits,
+        dataset_size,
         metrics.avg_latency,
         metrics.avg_tokens,
         metrics.efficiency,
