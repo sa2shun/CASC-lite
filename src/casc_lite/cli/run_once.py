@@ -6,6 +6,7 @@ import csv
 import datetime as dt
 import json
 import logging
+from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -36,6 +37,53 @@ def render_prompt(question: str, template: str | None) -> str:
     return f"{template.rstrip()}\n\n{clean_question}"
 
 
+def summarize_prefix_result(
+    *,
+    responses: list[str],
+    canonical_answers: list[str],
+    tokens: list[int],
+    sample_latencies: list[float],
+    n: int,
+) -> Dict[str, Any]:
+    """Return majority-vote summary for the first ``n`` responses."""
+
+    if n <= 0:
+        raise ValueError("n must be positive")
+    if not responses:
+        raise ValueError("No responses available to summarise")
+
+    limit = min(n, len(responses))
+    subset_responses = responses[:limit]
+    subset_canonical = canonical_answers[:limit]
+    subset_tokens = tokens[:limit]
+    subset_latencies = sample_latencies[:limit] if sample_latencies else []
+
+    first_occurrence: Dict[str, int] = {}
+    for idx, canonical in enumerate(subset_canonical):
+        first_occurrence.setdefault(canonical, idx)
+
+    counter = Counter(subset_canonical)
+    canonical_choice, top_votes = max(
+        counter.items(),
+        key=lambda item: (item[1], -first_occurrence[item[0]]),
+    )
+    chosen_idx = first_occurrence[canonical_choice]
+    predicted = subset_responses[chosen_idx]
+
+    avg_tokens = float(sum(subset_tokens) / max(limit, 1)) if subset_tokens else 0.0
+    latency = float(sum(subset_latencies)) if subset_latencies else 0.0
+
+    return {
+        "predicted": predicted,
+        "canonical_predicted": canonical_choice,
+        "votes": dict(counter),
+        "n_used": limit,
+        "avg_tokens": avg_tokens,
+        "latency": latency,
+        "top_votes": top_votes,
+    }
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run a CASC-lite experiment once.")
     parser.add_argument("--config", default="src/casc_lite/config/default.yaml", help="YAML config path")
@@ -60,6 +108,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--retry_on_error", type=int, default=None)
     parser.add_argument("--entropy_window", type=int, default=None)
     parser.add_argument("--beta", type=float, default=None)
+    parser.add_argument(
+        "--posthoc_n_values",
+        default=None,
+        help="Comma-separated list of sample counts to evaluate post-hoc",
+    )
+    parser.add_argument(
+        "--save_entropy_tokens",
+        type=int,
+        default=None,
+        help="Number of prefix entropy tokens to persist per example (0 disables)",
+    )
     parser.add_argument(
         "--save_completions",
         action="store_true",
@@ -100,15 +159,30 @@ def run_experiment(
     backend = backend or create_backend(config)
     sampler = AdaptiveSampler(backend=backend, config=config)
     evaluator = Evaluator()
+
+    posthoc_ns = sorted({int(n) for n in config.posthoc_n_values if int(n) > 0})
+    posthoc_evaluators: Dict[int, Evaluator] = {n: Evaluator() for n in posthoc_ns}
+
     n_values: list[int] = []
     entropies: list[float] = []
+    entropy_tokens_history: list[list[float]] = []
     completions_dump: list[Dict[str, Any]] = []
 
-    for example in data_records:
+    total_examples = len(data_records)
+
+    for idx, example in enumerate(data_records):
         question = str(example["question"]).strip()
         gold = str(example.get("answer", "")).strip()
         prompt = render_prompt(question, config.prompt_template)
         result = sampler.run(prompt)
+
+        entropy_value = result.entropy.average_entropy
+        entropies.append(entropy_value)
+        entropy_tokens = result.entropy.token_entropies
+        if config.save_entropy_tokens and config.save_entropy_tokens > 0:
+            entropy_tokens = entropy_tokens[: config.save_entropy_tokens]
+        entropy_tokens_history.append(entropy_tokens)
+
         evaluator.add_result(
             question=question,
             predicted=result.chosen,
@@ -117,31 +191,78 @@ def run_experiment(
             latency_seconds=result.latency_seconds,
             generated_tokens=result.generated_tokens,
             n_used=result.n_used,
-            entropy=result.entropy.average_entropy,
+            entropy=entropy_value,
         )
         n_values.append(result.n_used)
-        entropies.append(result.entropy.average_entropy)
+
+        prefix_summaries: Dict[int, Dict[str, Any]] = {}
+        for n in posthoc_ns:
+            summary_n = summarize_prefix_result(
+                responses=result.responses,
+                canonical_answers=result.canonical_answers,
+                tokens=result.tokens,
+                sample_latencies=result.sample_latencies,
+                n=n,
+            )
+            prefix_summaries[n] = summary_n
+            posthoc_evaluators[n].add_result(
+                question=question,
+                predicted=summary_n["predicted"],
+                canonical_predicted=summary_n["canonical_predicted"],
+                gold=gold,
+                latency_seconds=summary_n["latency"],
+                generated_tokens=summary_n["avg_tokens"],
+                n_used=summary_n["n_used"],
+                entropy=entropy_value,
+            )
+
         if save_completions:
             completions_dump.append(
                 {
                     "question": question,
                     "responses": result.responses,
+                    "canonical_answers": result.canonical_answers,
                     "votes": result.votes,
                     "chosen": result.chosen,
                     "canonical_choice": result.canonical_choice,
-                    "entropy": result.entropy.average_entropy,
+                    "entropy": entropy_value,
+                    "entropy_tokens": entropy_tokens,
                     "latency": result.latency_seconds,
                     "generated_tokens": result.generated_tokens,
                     "n_used": result.n_used,
+                    "tokens": result.tokens,
+                    "sample_latencies": result.sample_latencies,
+                    "posthoc": prefix_summaries if posthoc_ns else None,
                     "gold": gold,
                 }
             )
+
+        logger.info(
+            "Progress: %d/%d (%.1f%%)",
+            idx + 1,
+            total_examples,
+            (idx + 1) * 100.0 / total_examples,
+        )
 
     metrics = evaluator.aggregate()
     avg_n = sum(n_values) / len(n_values)
     avg_entropy = sum(entropies) / len(entropies)
     correct_strict = sum(1 for example in evaluator.examples if example.correct_strict)
     correct_normalized = sum(1 for example in evaluator.examples if example.correct_normalized)
+
+    posthoc_summary: Dict[int, Dict[str, Any]] = {}
+    for n, posthoc_eval in posthoc_evaluators.items():
+        posthoc_metrics = posthoc_eval.aggregate()
+        total = len(posthoc_eval.examples)
+        if total == 0:
+            continue
+        posthoc_summary[n] = {
+            "metrics": posthoc_metrics,
+            "avg_n": sum(example.n_used for example in posthoc_eval.examples) / total,
+            "dataset_size": total,
+            "correct_strict": sum(example.correct_strict for example in posthoc_eval.examples),
+            "correct_normalized": sum(example.correct_normalized for example in posthoc_eval.examples),
+        }
 
     return {
         "metrics": metrics,
@@ -152,6 +273,10 @@ def run_experiment(
         "completions": completions_dump,
         "correct_strict_count": correct_strict,
         "correct_normalized_count": correct_normalized,
+        "posthoc_evaluators": posthoc_evaluators,
+        "posthoc_summary": posthoc_summary,
+        "posthoc_n_values": posthoc_ns,
+        "entropy_tokens_history": entropy_tokens_history,
     }
 
 
@@ -165,10 +290,13 @@ def persist_results(
 ) -> Dict[str, Path | None]:
     metrics = summary["metrics"]
     evaluator: Evaluator = summary["evaluator"]
+    posthoc_evaluators: Dict[int, Evaluator] = summary.get("posthoc_evaluators", {})
+    posthoc_ns = sorted(posthoc_evaluators.keys())
+    entropy_tokens_history = summary.get("entropy_tokens_history") or []
 
     per_example_path = output_dir / f"{run_id}_examples.csv"
     with open(per_example_path, "w", newline="", encoding="utf-8") as fp:
-        fieldnames = [
+        base_fieldnames = [
             "index",
             "question",
             "predicted",
@@ -181,10 +309,61 @@ def persist_results(
             "generated_tokens",
             "n_used",
             "entropy",
+            "entropy_tokens",
         ]
+
+        scenario_fieldnames: list[str] = []
+        for n in posthoc_ns:
+            suffix = f"n{n}"
+            scenario_fieldnames.extend(
+                [
+                    f"predicted_{suffix}",
+                    f"canonical_predicted_{suffix}",
+                    f"correct_strict_{suffix}",
+                    f"correct_normalized_{suffix}",
+                    f"latency_seconds_{suffix}",
+                    f"generated_tokens_{suffix}",
+                    f"n_used_{suffix}",
+                ]
+            )
+
+        fieldnames = base_fieldnames + scenario_fieldnames
         writer = csv.DictWriter(fp, fieldnames=fieldnames)
         writer.writeheader()
-        for row in evaluator.to_csv_rows():
+
+        primary_examples = evaluator.examples
+        scenario_examples = {n: posthoc_evaluators[n].examples for n in posthoc_ns}
+
+        for idx, example in enumerate(primary_examples):
+            row = {
+                "index": idx,
+                "question": example.question,
+                "predicted": example.predicted,
+                "canonical_predicted": example.canonical_predicted,
+                "gold": example.gold,
+                "evaluation_mode": example.evaluation_mode,
+                "correct_strict": int(example.correct_strict),
+                "correct_normalized": int(example.correct_normalized),
+                "latency_seconds": example.latency_seconds,
+                "generated_tokens": example.generated_tokens,
+                "n_used": example.n_used,
+                "entropy": example.entropy,
+                "entropy_tokens": json.dumps(
+                    entropy_tokens_history[idx] if idx < len(entropy_tokens_history) else []
+                ),
+            }
+
+            for n in posthoc_ns:
+                scenario = scenario_examples[n][idx]
+                suffix = f"n{n}"
+                row[f"predicted_{suffix}"] = scenario.predicted
+                row[f"canonical_predicted_{suffix}"] = scenario.canonical_predicted
+                row[f"correct_strict_{suffix}"] = int(scenario.correct_strict)
+                row[f"correct_normalized_{suffix}"] = int(scenario.correct_normalized)
+                row[f"latency_seconds_{suffix}"] = scenario.latency_seconds
+                row[f"generated_tokens_{suffix}"] = scenario.generated_tokens
+                row[f"n_used_{suffix}"] = scenario.n_used
+
             writer.writerow(row)
 
     aggregate_path = output_dir / "aggregate.csv"
@@ -209,6 +388,19 @@ def persist_results(
         "avg_n": summary["avg_n"],
         "avg_entropy": summary["avg_entropy"],
     }
+
+    for n in sorted(summary.get("posthoc_summary", {}).keys()):
+        info = summary["posthoc_summary"][n]
+        metrics_n = info["metrics"]
+        suffix = f"n{n}"
+        summary_row[f"accuracy_strict_{suffix}"] = metrics_n.accuracy_strict
+        summary_row[f"accuracy_normalized_{suffix}"] = metrics_n.accuracy_normalized
+        summary_row[f"avg_latency_{suffix}"] = metrics_n.avg_latency
+        summary_row[f"avg_tokens_{suffix}"] = metrics_n.avg_tokens
+        summary_row[f"efficiency_{suffix}"] = metrics_n.efficiency
+        summary_row[f"avg_n_{suffix}"] = info["avg_n"]
+        summary_row[f"correct_strict_count_{suffix}"] = info["correct_strict"]
+        summary_row[f"correct_normalized_count_{suffix}"] = info["correct_normalized"]
 
     write_header = not aggregate_path.exists()
     with open(aggregate_path, "a", newline="", encoding="utf-8") as fp:
