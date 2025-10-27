@@ -72,3 +72,31 @@ def test_run_majority_vote_numeric_priority():
     assert result.chosen.startswith("The final answer is 11")
     expected_avg_tokens = sum(len(r.split()) for r in responses) / len(responses)
     assert result.generated_tokens == pytest.approx(expected_avg_tokens)
+
+
+def test_run_escalates_on_weak_consensus():
+    entropy_values = [1.5]  # choose mid candidate (n=3)
+    response_sets = [
+        ["11", "12", "13"],  # no agreement
+        ["Answer 14", "14"],  # top-up by 2 samples
+    ]
+    backend = DummyBackend(entropy_values, response_sets)
+    config = make_config(a=1.0, b=2.0, n_candidates=[1, 3, 5], mode="adaptive")
+    sampler = AdaptiveSampler(backend, config)
+    result = sampler.run("Hard question")
+
+    assert result.n_used == 5
+    assert result.votes["14"] == 2
+    # No majority reached, but top choice should be the most recent consensus candidate
+    assert result.canonical_choice == "14"
+
+
+def test_fixed_mode_never_topups():
+    responses = ["A", "B", "C"]
+    backend = DummyBackend(entropy_values=[0.2], response_sets=[responses])
+    config = make_config(mode="fixed", n_fixed=3, n_candidates=[3])
+    sampler = AdaptiveSampler(backend, config)
+    result = sampler.run("Question")
+
+    assert result.n_used == 3
+    assert backend._response_sets == []

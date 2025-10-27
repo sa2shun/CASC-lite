@@ -24,6 +24,18 @@ from casc_lite.core.utils import (
 logger = logging.getLogger(__name__)
 
 
+def render_prompt(question: str, template: str | None) -> str:
+    """Apply a prompt template to a GSM8K question."""
+
+    clean_question = question.strip()
+    if not template:
+        return clean_question
+    placeholder = "{question}"
+    if placeholder in template:
+        return template.replace(placeholder, clean_question)
+    return f"{template.rstrip()}\n\n{clean_question}"
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run a CASC-lite experiment once.")
     parser.add_argument("--config", default="src/casc_lite/config/default.yaml", help="YAML config path")
@@ -93,9 +105,10 @@ def run_experiment(
     completions_dump: list[Dict[str, Any]] = []
 
     for example in data_records:
-        question = example["question"]
-        gold = example.get("answer", "")
-        result = sampler.run(question)
+        question = str(example["question"]).strip()
+        gold = str(example.get("answer", "")).strip()
+        prompt = render_prompt(question, config.prompt_template)
+        result = sampler.run(prompt)
         evaluator.add_result(
             question=question,
             predicted=result.chosen,
