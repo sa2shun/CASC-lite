@@ -47,6 +47,8 @@ class ExperimentConfig:
         "You are a helpful math tutor. Solve the following problem step by step "
         "and provide only the final numeric answer.\n\nQuestion: {question}\nAnswer:"
     )
+    posthoc_n_values: List[int] = field(default_factory=list)
+    save_entropy_tokens: int = 0
 
 
 def _coerce_optional(value: Any) -> Any:
@@ -74,12 +76,16 @@ def load_config(path: str | Path | None, overrides: Dict[str, Any] | None = None
             base[key] = value
 
     # Normalise list-type parameters.
-    if isinstance(base.get("n_candidates"), str):
-        base["n_candidates"] = [int(x) for x in base["n_candidates"].split(",") if x]
-    elif isinstance(base.get("n_candidates"), Iterable) and not isinstance(base.get("n_candidates"), list):
-        base["n_candidates"] = [int(x) for x in base["n_candidates"]]
-    else:
-        base["n_candidates"] = [int(x) for x in base.get("n_candidates", [])]
+    def _coerce_int_list(value: Any) -> List[int]:
+        if isinstance(value, str):
+            items = [item.strip() for item in value.split(",") if item.strip()]
+            return [int(item) for item in items]
+        if isinstance(value, Iterable) and not isinstance(value, list):
+            return [int(item) for item in value]
+        return [int(item) for item in (value or [])]
+
+    base["n_candidates"] = _coerce_int_list(base.get("n_candidates"))
+    base["posthoc_n_values"] = [n for n in _coerce_int_list(base.get("posthoc_n_values")) if n > 0]
 
     if not base["n_candidates"]:
         base["n_candidates"] = [1]
@@ -93,7 +99,15 @@ def load_config(path: str | Path | None, overrides: Dict[str, Any] | None = None
     if base.get("top_k") is not None:
         base["top_k"] = int(base["top_k"])
 
-    int_fields = ["seed", "K", "max_new_tokens", "min_new_tokens", "retry_on_error", "entropy_window"]
+    int_fields = [
+        "seed",
+        "K",
+        "max_new_tokens",
+        "min_new_tokens",
+        "retry_on_error",
+        "entropy_window",
+        "save_entropy_tokens",
+    ]
     float_fields = ["a", "b", "T", "beta"]
 
     for field_name in int_fields:

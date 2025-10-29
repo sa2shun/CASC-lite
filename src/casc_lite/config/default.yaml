@@ -22,3 +22,5 @@ prompt_template: |
   
   Question: {question}
   Answer:
+posthoc_n_values: []
+save_entropy_tokens: 0
