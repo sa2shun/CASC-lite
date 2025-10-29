@@ -29,6 +29,11 @@ class ExampleResult:
     generated_tokens: float
     n_used: int
     entropy: float
+    vote_margin: float | None = None
+    second_vote_ratio: float | None = None
+    token_length_std: float | None = None
+    avg_logprob: float | None = None
+    logprob_std: float | None = None
 
 
 class Evaluator:
@@ -48,6 +53,11 @@ class Evaluator:
         generated_tokens: float,
         n_used: int,
         entropy: float,
+        vote_margin: float | None = None,
+        second_vote_ratio: float | None = None,
+        token_length_std: float | None = None,
+        avg_logprob: float | None = None,
+        logprob_std: float | None = None,
     ) -> None:
         gold_number = extract_number(gold)
         pred_number = extract_number(canonical_predicted)
@@ -72,6 +82,11 @@ class Evaluator:
             generated_tokens=generated_tokens,
             n_used=n_used,
             entropy=entropy,
+            vote_margin=vote_margin,
+            second_vote_ratio=second_vote_ratio,
+            token_length_std=token_length_std,
+            avg_logprob=avg_logprob,
+            logprob_std=logprob_std,
         )
         self.examples.append(example)
 
@@ -109,4 +124,9 @@ class Evaluator:
                 "generated_tokens": example.generated_tokens,
                 "n_used": example.n_used,
                 "entropy": example.entropy,
+                "vote_margin": example.vote_margin,
+                "second_vote_ratio": example.second_vote_ratio,
+                "token_length_std": example.token_length_std,
+                "avg_logprob": example.avg_logprob,
+                "logprob_std": example.logprob_std,
             }

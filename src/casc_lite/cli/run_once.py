@@ -192,6 +192,11 @@ def run_experiment(
             generated_tokens=result.generated_tokens,
             n_used=result.n_used,
             entropy=entropy_value,
+            vote_margin=result.vote_margin,
+            second_vote_ratio=result.second_vote_ratio,
+            token_length_std=result.token_length_std,
+            avg_logprob=result.avg_logprob,
+            logprob_std=result.logprob_std,
         )
         n_values.append(result.n_used)
 
@@ -232,6 +237,12 @@ def run_experiment(
                     "n_used": result.n_used,
                     "tokens": result.tokens,
                     "sample_latencies": result.sample_latencies,
+                    "sample_logprobs": result.sample_logprobs,
+                    "vote_margin": result.vote_margin,
+                    "second_vote_ratio": result.second_vote_ratio,
+                    "token_length_std": result.token_length_std,
+                    "avg_logprob": result.avg_logprob,
+                    "logprob_std": result.logprob_std,
                     "posthoc": prefix_summaries if posthoc_ns else None,
                     "gold": gold,
                 }
@@ -309,6 +320,11 @@ def persist_results(
             "generated_tokens",
             "n_used",
             "entropy",
+            "vote_margin",
+            "second_vote_ratio",
+            "token_length_std",
+            "avg_logprob",
+            "logprob_std",
             "entropy_tokens",
         ]
 
@@ -348,6 +364,11 @@ def persist_results(
                 "generated_tokens": example.generated_tokens,
                 "n_used": example.n_used,
                 "entropy": example.entropy,
+                "vote_margin": example.vote_margin,
+                "second_vote_ratio": example.second_vote_ratio,
+                "token_length_std": example.token_length_std,
+                "avg_logprob": example.avg_logprob,
+                "logprob_std": example.logprob_std,
                 "entropy_tokens": json.dumps(
                     entropy_tokens_history[idx] if idx < len(entropy_tokens_history) else []
                 ),

@@ -99,7 +99,7 @@ class HFTransformersBackend(BaseBackend):
             min_new_tokens=min_new_tokens,
             num_return_sequences=n,
             return_dict_in_generate=True,
-            output_scores=False,
+            output_scores=True,
             pad_token_id=self.tokenizer.pad_token_id,
             eos_token_id=self.tokenizer.eos_token_id,
         )
@@ -115,17 +115,30 @@ class HFTransformersBackend(BaseBackend):
         if sequences is None:
             raise BackendError("Generation returned no sequences")
         prompt_length = inputs["input_ids"].shape[-1]
+        scores = getattr(generation, "scores", None)
+        logprob_tensor = None
+        if scores:
+            # scores is a list of length max_new_tokens, each tensor [batch, vocab]
+            stacked = torch.stack([step_score.to("cpu") for step_score in scores], dim=0)
+            logprob_tensor = stacked.log_softmax(dim=-1)
         outputs: list[Dict[str, Any]] = []
         for idx, sequence in enumerate(sequences):
             sequence = sequence.to("cpu")
             generated_part = sequence[prompt_length:]
             text = self.tokenizer.decode(generated_part, skip_special_tokens=True)
+            avg_logprob = None
+            if logprob_tensor is not None and len(generated_part) > 0:
+                total_logprob = 0.0
+                for step, token_id in enumerate(generated_part):
+                    total_logprob += float(logprob_tensor[step, idx, token_id])
+                avg_logprob = total_logprob / float(len(generated_part))
             outputs.append(
                 {
                     "text": text,
                     "token_ids": generated_part.tolist(),
                     "num_generated_tokens": len(generated_part),
                     "sample_index": idx,
+                    "avg_logprob": avg_logprob,
                 }
             )
         return outputs
