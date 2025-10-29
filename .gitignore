@@ -18,6 +18,8 @@ results/
 *.jsonl.gz
 *.png
 *.pdf
+!figures/
+!figures/*.png
 
 # Local configs
 .envrc

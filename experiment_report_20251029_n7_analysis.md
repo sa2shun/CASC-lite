@@ -61,23 +61,59 @@ Three-tier thresholds (a ≤ b ≤ c) searched over 200 combinations per K, reus
 | Fixed n=5 | 45.60% | 5.00 | 8.42 | 100.28 |
 | Fixed n=7 | 49.97% | 7.00 | 11.77 | 100.13 |
 | K=8 High-Accuracy | 46.80% | 5.80 | 9.90 | 100.16 |
-| K=8 High-Efficiency | 36.34% | 2.20 | 3.80 | 100.27 |
-| K=8 Balanced | 41.94% | 4.00 | 6.84 | 100.26 |
 | K=16 High-Accuracy | 47.32% | 5.80 | 9.92 | 99.97 |
-| K=16 High-Efficiency | 36.58% | 2.20 | 3.80 | 100.16 |
-| K=16 Balanced | 42.41% | 4.00 | 6.89 | 100.37 |
 | K=32 High-Accuracy | 46.77% | 5.80 | 9.82 | 100.02 |
-| K=32 High-Efficiency | 35.66% | 2.20 | 3.77 | 100.13 |
+| K=8 Balanced | 41.94% | 4.00 | 6.84 | 100.26 |
+| K=16 Balanced | 42.41% | 4.00 | 6.89 | 100.37 |
 | K=32 Balanced | 41.25% | 4.00 | 6.83 | 100.30 |
 | Entropy-NN (avg n ≤ 6) | 47.36% | 5.88 | 9.87 | 100.19 |
 | Entropy-NN (avg n ≤ 5) | 44.68% | 4.90 | 8.22 | 100.34 |
 | Entropy-NN (avg n ≤ 4) | 40.83% | 3.99 | 6.66 | 100.40 |
+| Cascade-NN (avg n ≤ 6) | 48.18% | 5.97 | 10.03 | 100.05 |
+| Cascade-NN (avg n ≤ 5) | 45.54% | 4.94 | 8.30 | 100.22 |
+| Cascade-NN (avg n ≤ 4) | 41.73% | 3.99 | 6.69 | 100.30 |
+| Cascade-NN (avg n ≤ 3.5) | 39.76% | 3.50 | 5.82 | 100.32 |
 
 These "Entropy-NN" rows apply the logistic-regression models trained on the full 32-token entropy trajectory.  Thresholds on the predicted success probability decide whether to stop at n=3, escalate to n=5, or fall back to n=7.  The best settings found on the cached run were:
 
 - Avg n ≤ 6: stop at n=3 when p₃ ≥ 0.65, otherwise accept n=5 if p₅ ≥ 0.45, else use n=7 (n₃ share 0.5%, n₅ 55.1%, n₇ 44.5%).
 - Avg n ≤ 5: thresholds (p₃ ≥ 0.50, p₅ ≥ 0.30) yielding n₃ 18.0%, n₅ 69.0%, n₇ 13.0%.
 - Avg n ≤ 4: thresholds (0.30, 0.40) biasing heavily toward n₃ (74.8%) with occasional fallbacks to n₇ (24.6%).
+
+Extending this to a cascade, stage-specific models first predict n=1 success from the entropy trajectory; if doubtful they fall back to the n=3 model (entropy + stage‑1 probability + n₁/n₃ agreement), and repeat for n=5/n=7 with additional agreement flags.  Grid search yielded:
+
+- Avg n ≤ 6: thresholds (t₁=0.60, t₃=0.55, t₅=0.50) → n₁ 0%, n₃ 8%, n₅ 34%, n₇ 57%.
+- Avg n ≤ 5: (0.70, 0.50, 0.30) → n₁ 0%, n₃ 15%, n₅ 72%, n₇ 12%.
+- Avg n ≤ 4: (0.40, 0.45, 0.30) → n₁ 27%, n₃ 8%, n₅ 53%, n₇ 12%.
+- Avg n ≤ 3.5: (0.35, 0.45, 0.35) → n₁ 45%, n₃ 4%, n₅ 32%, n₇ 19%.
+
+| Strategy family | Regression (accuracy %) | Points used |
+| --- | --- | --- |
+| Fixed n | Accuracy ≈ **1.75 × latency + 29.88** | (1.69,32.83), (5.06,38.24), (8.42,45.60), (11.77,49.97) |
+| Cascade-NN | Accuracy ≈ **2.02 × latency + 28.20** | (10.03,48.18), (8.30,45.54), (6.69,41.73), (5.82,39.76) |
+
+![Accuracy vs. latency for fixed-sample and cascade strategies](figures/accuracy_vs_latency_fixed_vs_cascade.png)
+
+#### Accuracy vs. Latency (linear trend)
+
+| Strategy family | Regression (accuracy %) | Points used |
+| --- | --- | --- |
+| Fixed n | Accuracy ≈ **1.75 × latency + 29.88** | (1.69,32.83), (5.06,38.24), (8.42,45.60), (11.77,49.97) |
+| Cascade-NN | Accuracy ≈ **2.02 × latency + 28.20** | (10.03,48.18), (8.30,45.54), (6.69,41.73), (5.82,39.76) |
+
+```
+Fixed n trend (accuracy %)        Cascade-NN trend (accuracy %)
+ 55 |                               55 |
+    |                                  |
+ 50 |                        ●         | 50 |      ●
+    |                     ●            |    |   ●
+ 45 |                 ●                | 45 | ●
+    |              ●                   |    |        ●
+ 40 |                                  | 40 |
+    |                                  |    |
+ 35 |                                  | 35 |
+       2   4   6   8  10  12  latency        6   7   8   9  10 latency
+```
 
 ### High-Accuracy Frontier (avg_n ≈ 5.8, latency ≈ 9.9 s)
 | K | (a, b, c) | Accuracy | Avg n | Avg latency |
@@ -181,23 +217,38 @@ These "Entropy-NN" rows apply the logistic-regression models trained on the full
 | 固定 n=5 | 45.60% | 5.00 | 8.42 | 100.28 |
 | 固定 n=7 | 49.97% | 7.00 | 11.77 | 100.13 |
 | K=8 高精度 | 46.80% | 5.80 | 9.90 | 100.16 |
-| K=8 高効率 | 36.34% | 2.20 | 3.80 | 100.27 |
-| K=8 バランス | 41.94% | 4.00 | 6.84 | 100.26 |
 | K=16 高精度 | 47.32% | 5.80 | 9.92 | 99.97 |
-| K=16 高効率 | 36.58% | 2.20 | 3.80 | 100.16 |
-| K=16 バランス | 42.41% | 4.00 | 6.89 | 100.37 |
 | K=32 高精度 | 46.77% | 5.80 | 9.82 | 100.02 |
-| K=32 高効率 | 35.66% | 2.20 | 3.77 | 100.13 |
+| K=8 バランス | 41.94% | 4.00 | 6.84 | 100.26 |
+| K=16 バランス | 42.41% | 4.00 | 6.89 | 100.37 |
 | K=32 バランス | 41.25% | 4.00 | 6.83 | 100.30 |
 | エントロピーNN (平均 n ≤ 6) | 47.36% | 5.88 | 9.87 | 100.19 |
 | エントロピーNN (平均 n ≤ 5) | 44.68% | 4.90 | 8.22 | 100.34 |
 | エントロピーNN (平均 n ≤ 4) | 40.83% | 3.99 | 6.66 | 100.40 |
+| カスケードNN (平均 n ≤ 6) | 48.18% | 5.97 | 10.03 | 100.05 |
+| カスケードNN (平均 n ≤ 5) | 45.54% | 4.94 | 8.30 | 100.22 |
+| カスケードNN (平均 n ≤ 4) | 41.73% | 3.99 | 6.69 | 100.30 |
+| カスケードNN (平均 n ≤ 3.5) | 39.76% | 3.50 | 5.82 | 100.32 |
 
 ここでの「エントロピーNN」は、プレフィックス32トークン分のエントロピー系列を入力し、n=3/5/7 の正答確率をロジスティック回帰で推定したうえで閾値制御した結果である。具体的には、p₃・p₅ に対する閾値をグリッドサーチし、
 
 - 平均 n ≤ 6: (p₃ ≥ 0.65, p₅ ≥ 0.45) の場合に停止、それ以外は n=7（n₃ 0.5%、n₅ 55.1%、n₇ 44.5%）。
 - 平均 n ≤ 5: (p₃ ≥ 0.50, p₅ ≥ 0.30) で n₃ 18.0%、n₅ 69.0%、n₇ 13.0%。
 - 平均 n ≤ 4: (0.30, 0.40) によって n₃ 停止 74.8%、n₅ 0.6%、n₇ 24.6%。
+
+「カスケードNN」は段階的に判定器を適用する方式で、(1) エントロピーのみで n=1 の正答確率を推定し、危険なら (2) n=3 まで生成してエントロピー＋一致フラグから正答確率を再評価、(3) さらに n=5/n=7 でも同様に判定する。最適閾値は次の通り。
+
+- 平均 n ≤ 6: (t₁=0.60, t₃=0.55, t₅=0.50) → n₁ 0%、n₃ 8%、n₅ 34%、n₇ 57%。
+- 平均 n ≤ 5: (0.70, 0.50, 0.30) → n₁ 0%、n₃ 15%、n₅ 72%、n₇ 12%。
+- 平均 n ≤ 4: (0.40, 0.45, 0.30) → n₁ 27%、n₃ 8%、n₅ 53%、n₇ 12%。
+- 平均 n ≤ 3.5: (0.35, 0.45, 0.35) → n₁ 45%、n₃ 4%、n₅ 32%、n₇ 19%。
+
+| ストラテジー群 | 回帰式 (Accuracy %) | 使用点 |
+| --- | --- | --- |
+| 固定 n | Accuracy ≈ **1.75 × latency + 29.88** | (1.69,32.83), (5.06,38.24), (8.42,45.60), (11.77,49.97) |
+| カスケードNN | Accuracy ≈ **2.02 × latency + 28.20** | (10.03,48.18), (8.30,45.54), (6.69,41.73), (5.82,39.76) |
+
+![固定方式とカスケード方式の精度-レイテンシ関係](figures/accuracy_vs_latency_fixed_vs_cascade.png)
 
 ### 高精度フロンティア（avg_n ≈ 5.8, latency ≈ 9.9 s）
 | K | (a, b, c) | 精度 | 平均 n | 平均レイテンシ |
