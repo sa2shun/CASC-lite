@@ -69,6 +69,15 @@ Three-tier thresholds (a ≤ b ≤ c) searched over 200 combinations per K, reus
 | K=32 High-Accuracy | 46.77% | 5.80 | 9.82 | 100.02 |
 | K=32 High-Efficiency | 35.66% | 2.20 | 3.77 | 100.13 |
 | K=32 Balanced | 41.25% | 4.00 | 6.83 | 100.30 |
+| Entropy-NN (avg n ≤ 6) | 47.36% | 5.88 | 9.87 | 100.19 |
+| Entropy-NN (avg n ≤ 5) | 44.68% | 4.90 | 8.22 | 100.34 |
+| Entropy-NN (avg n ≤ 4) | 40.83% | 3.99 | 6.66 | 100.40 |
+
+These "Entropy-NN" rows apply the logistic-regression models trained on the full 32-token entropy trajectory.  Thresholds on the predicted success probability decide whether to stop at n=3, escalate to n=5, or fall back to n=7.  The best settings found on the cached run were:
+
+- Avg n ≤ 6: stop at n=3 when p₃ ≥ 0.65, otherwise accept n=5 if p₅ ≥ 0.45, else use n=7 (n₃ share 0.5%, n₅ 55.1%, n₇ 44.5%).
+- Avg n ≤ 5: thresholds (p₃ ≥ 0.50, p₅ ≥ 0.30) yielding n₃ 18.0%, n₅ 69.0%, n₇ 13.0%.
+- Avg n ≤ 4: thresholds (0.30, 0.40) biasing heavily toward n₃ (74.8%) with occasional fallbacks to n₇ (24.6%).
 
 ### High-Accuracy Frontier (avg_n ≈ 5.8, latency ≈ 9.9 s)
 | K | (a, b, c) | Accuracy | Avg n | Avg latency |
@@ -180,6 +189,15 @@ Three-tier thresholds (a ≤ b ≤ c) searched over 200 combinations per K, reus
 | K=32 高精度 | 46.77% | 5.80 | 9.82 | 100.02 |
 | K=32 高効率 | 35.66% | 2.20 | 3.77 | 100.13 |
 | K=32 バランス | 41.25% | 4.00 | 6.83 | 100.30 |
+| エントロピーNN (平均 n ≤ 6) | 47.36% | 5.88 | 9.87 | 100.19 |
+| エントロピーNN (平均 n ≤ 5) | 44.68% | 4.90 | 8.22 | 100.34 |
+| エントロピーNN (平均 n ≤ 4) | 40.83% | 3.99 | 6.66 | 100.40 |
+
+ここでの「エントロピーNN」は、プレフィックス32トークン分のエントロピー系列を入力し、n=3/5/7 の正答確率をロジスティック回帰で推定したうえで閾値制御した結果である。具体的には、p₃・p₅ に対する閾値をグリッドサーチし、
+
+- 平均 n ≤ 6: (p₃ ≥ 0.65, p₅ ≥ 0.45) の場合に停止、それ以外は n=7（n₃ 0.5%、n₅ 55.1%、n₇ 44.5%）。
+- 平均 n ≤ 5: (p₃ ≥ 0.50, p₅ ≥ 0.30) で n₃ 18.0%、n₅ 69.0%、n₇ 13.0%。
+- 平均 n ≤ 4: (0.30, 0.40) によって n₃ 停止 74.8%、n₅ 0.6%、n₇ 24.6%。
 
 ### 高精度フロンティア（avg_n ≈ 5.8, latency ≈ 9.9 s）
 | K | (a, b, c) | 精度 | 平均 n | 平均レイテンシ |
