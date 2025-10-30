@@ -20,6 +20,7 @@ results/
 *.pdf
 !figures/
 !figures/*.png
+!figures/**/*.png
 
 # Local configs
 .envrc
