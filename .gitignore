@@ -18,6 +18,7 @@ results/
 *.jsonl.gz
 *.png
 *.pdf
+!reports/papers/*.pdf
 !figures/
 !figures/*.png
 !figures/**/*.png
