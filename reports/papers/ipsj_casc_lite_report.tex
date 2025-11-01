@@ -5,17 +5,17 @@
 \usepackage{array}
 \usepackage{url}
 
-\title{GSM8K におけるエントロピー適応型自己一貫性サンプリングの分析報告}
+\title{GSM8K におけるエントロピー適応型 self-consistency サンプリングの分析}
 
-\author{佐々木 駿・川島 英之}{sasakishun@keio.jp}
-\affiliate{aff1}{慶應義塾大学 理工学部}
+\author{佐々木 駿・川島 英之}{shun.sasaki@keio.jp}
+\affiliate{aff1}{慶應義塾大学 環境情報学部}
 
 \begin{document}
 
 \maketitle
 
 \section{研究概要}
-本報告は，自己一貫性サンプリングを実装した CASC-lite を用い，算数ベンチマーク GSM8K\cite{Cobbe2021TrainingVT} に対してサンプル数を最大 $n=50$ まで拡張した再現実験の結果をまとめたものである。自己一貫性は Chain-of-Thought 推論を改善する手法として注目されており\cite{Wang2022SelfConsistencyIC}，本研究ではサンプル数の増加が精度・レイテンシ・各種信頼度指標に与える影響を定量的に整理することを目的とする。
+本報告は，self-consistency サンプリングを実装した再現環境を用い，算数ベンチマーク GSM8K\cite{Cobbe2021TrainingVT} に対してサンプル数を最大 $n=50$ まで拡張した再現実験の結果をまとめたものである。Self-consistency は Chain-of-Thought 推論を改善する手法として注目されており\cite{Wang2022SelfConsistencyIC}，本研究ではサンプル数の増加が精度・レイテンシ・各種信頼度指標に与える影響を定量的に整理することを目的とする。
 
 \section{実験構成}
 Meta-Llama-3-8B-Instruct（HF Transformers）を用い，temperature=0.7，top-p=0.9 とした。全 8,792 問に対し固定 $n=50$ の推論を一度行い，得られた 50 本の出力から先頭 $n$ 本のみを切り出して多数決を再計算するポストホック評価を採用した。記録した主な指標はプレフィックスエントロピー，投票マージン，二番手票率，サンプル生成時間である。
