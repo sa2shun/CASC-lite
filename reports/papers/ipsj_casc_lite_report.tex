@@ -15,14 +15,14 @@
 \maketitle
 
 \section{研究概要}
-本報告は，自己一貫性サンプリングを実装した CASC-lite を用い，算数ベンチマーク GSM8K に対してサンプル数を最大 $n=50$ まで拡張した再現実験の結果をまとめたものである。目的は SOTA の主張ではなく，サンプル数の増加が精度・レイテンシ・各種信頼度指標に与える影響を明確にすることである。
+本報告は，自己一貫性サンプリングを実装した CASC-lite を用い，算数ベンチマーク GSM8K\cite{Cobbe2021TrainingVT} に対してサンプル数を最大 $n=50$ まで拡張した再現実験の結果をまとめたものである。自己一貫性は Chain-of-Thought 推論を改善する手法として注目されており\cite{Wang2022SelfConsistencyIC}，本研究ではサンプル数の増加が精度・レイテンシ・各種信頼度指標に与える影響を定量的に整理することを目的とする。
 
 \section{実験構成}
 Meta-Llama-3-8B-Instruct（HF Transformers）を用い，temperature=0.7，top-p=0.9 とした。全 8,792 問に対し固定 $n=50$ の推論を一度行い，得られた 50 本の出力から先頭 $n$ 本のみを切り出して多数決を再計算するポストホック評価を採用した。記録した主な指標はプレフィックスエントロピー，投票マージン，二番手票率，サンプル生成時間である。
 
 \section{主な結果}
 \subsection{精度とレイテンシ}
-表\ref{tab:accuracy}に主要なサンプル数での厳密精度と累積レイテンシを示す。10 サンプルまでは比較的大きな改善が得られるが，20 サンプルを超えると増分は 1--2pt に留まる。
+表\ref{tab:accuracy}に主要なサンプル数での厳密精度と累積レイテンシを示す。10 サンプルまでは比較的大きな改善が得られるが，20 サンプルを超えると増分は 1--2pt に留まる。加えて，図\ref{fig:accuracy_curve} にサンプル数と精度・レイテンシの関係をグラフで示す。
 
 \begin{table}[h]
   \centering
@@ -42,8 +42,31 @@ Meta-Llama-3-8B-Instruct（HF Transformers）を用い，temperature=0.7，top-p
   \end{tabular}
 \end{table}
 
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.8\linewidth]{../../figures/n50_batch/accuracy_vs_n50.png}
+  \caption{サンプル数に対する厳密精度（上）とレイテンシ（下）の推移}
+  \label{fig:accuracy_curve}
+\end{figure}
+
 \subsection{信頼度指標との相関}
-投票マージンは $r=0.37$ と最も高い正の相関を示し，二番手票率は負の相関 ($r=-0.16$) を示した。一方，プレフィックスエントロピーは $r=0.08$ と弱く，単独では難問検出に十分ではない。またサンプル生成時間は $r=-0.10$ であり，長時間を要する問題ほど誤答率が高い傾向が確認できた。
+表\ref{tab:correlation} に，主要指標の定義と $n=50$ 正答率との相関係数を示す。投票マージンは最も高い正の相関（$r=0.37$）を示し，二番手票率は負の相関（$r=-0.16$）を示した。プレフィックスエントロピーは $r=0.08$ と弱く，単独では難問検出に十分ではない。またサンプル生成時間は $r=-0.10$ であり，長時間を要する問題ほど誤答率が高い傾向が確認できた。
+
+\begin{table}[h]
+  \centering
+  \caption{正答率と指標の相関（全 8,792 問）}
+  \label{tab:correlation}
+  \begin{tabular}{@{}p{3cm}p{6cm}c@{}}
+    \toprule
+    指標 & 説明 & 相関係数 \\
+    \midrule
+    投票マージン & 最多数回答の得票比率（0.5 で僅差，1.0 で全会一致） & $+0.37$ \\
+    二番手票率 & 準多数回答の得票比率（高いほど票が割れている） & $-0.16$ \\
+    プレフィックスエントロピー & 先頭 $K$ トークンの平均エントロピー & $+0.08$ \\
+    サンプル生成時間 & 50 サンプル生成に要した総時間 & $-0.10$ \\
+  \bottomrule
+  \end{tabular}
+\end{table}
 
 \section{考察と今後の課題}
 サンプル数を増やすほど安定に正解へ収束するが，$n=50$ でも 13.9\% は誤答のままであり，投票マージンが小さい問題に集中している。今後は
@@ -56,8 +79,8 @@ Meta-Llama-3-8B-Instruct（HF Transformers）を用い，temperature=0.7，top-p
 
 \section*{参考文献}
 \begin{thebibliography}{9}
-\bibitem{original-report} CASC-lite プロジェクト資料，\\ \url{https://github.com/your-org/casc-lite-entropy-adaptive-sc}
-\bibitem{gsm8k} Cobbe, K. ほか: ``GSM8K: A Dataset for Grade School Math Word Problems,'' arXiv:2110.14168, 2021.
+\bibitem{Wang2022SelfConsistencyIC} Wang, X., Wei, J., Schuurmans, D., Le, Q., Chi, E., Zhou, D.: ``Self-Consistency Improves Chain of Thought Reasoning in Language Models,'' arXiv:2203.11171, 2022.
+\bibitem{Cobbe2021TrainingVT} Cobbe, K., Kosaraju, V., Bavarian, M., Chen, M., Jun, H., Kaiser, L., Plappert, M., Tworek, J., Hilton, J., Nakano, R., Hesse, C., Schulman, J.: ``Training Verifiers to Solve Math Word Problems,'' arXiv:2110.14168, 2021.
 \end{thebibliography}
 
 \end{document}
