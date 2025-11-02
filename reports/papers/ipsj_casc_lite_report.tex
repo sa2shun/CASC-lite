@@ -1,18 +1,18 @@
-% IPSJ v4-1 形式の簡易テンプレート（ipsj.cls を利用）
-\documentclass{ipsj}
+% Two-column Japanese article template
+\documentclass[twocolumn]{jsarticle}
 \usepackage[dvipdfmx]{graphicx}
 \usepackage{booktabs}
 \usepackage{array}
 \usepackage{url}
+\setlength{\columnsep}{10mm}
 
 \title{GSM8Kにおけるエントロピー適応型self-consistencyサンプリングの分析}
-
-\author{佐々木 駿・川島 英之}{shun.sasaki@keio.jp}
-\affiliate{aff1}{慶應義塾大学 環境情報学部}
+\author{慶應義塾大学 環境情報学部\quad 佐々木 駿・川島 英之\\\texttt{shun.sasaki@keio.jp}}
 
 \begin{document}
-
-\maketitle
+\twocolumn[
+  \maketitle
+]
 
 \section{背景}
 Self-consistency は複数の Chain-of-Thought を生成して多数決を取ることで推論精度を高めるが\cite{Wang2022SelfConsistencyIC}、サンプル数の増加に伴い推論時間とコストが増大する。本研究は算数ベンチマーク GSM8K\cite{Cobbe2021TrainingVT} を対象に、最大 $n=50$ までサンプルを伸長した際の精度・レイテンシ・信頼度指標を調査する。
@@ -80,7 +80,7 @@ GSM8K は 8,792 問の算数文章題からなり，各行に ``{question, answe
 サンプル数を増やすほど精度は向上するものの，$n=50$ でも 13.9\% の問題は誤答に留まり，票差が小さいケースで顕著であった。今後は vote margin や二番手票率に基づく動的停止，ログ尤度・自己検証プロンプトとの統合，他データセットでの検証を進め，コスト効率の良い制御ポリシーを設計する。
 
 \section*{謝辞}
-This paper is based on results obtained from the project “Research and Development Project of the Enhanced Infrastructures for Post-5G Information and Communication Systems (JPNP20017)” and JPNP16007 commissioned by the New Energy and Industrial Technology Development Organization (NEDO), and from JSPS KAKENHI Grant Number 25H00446, and from JST CREST Grant Number JPMJCR24R4, and from SECOM Science and Technology Foundation, and JST COI-NEXT SQAI (JPMJPF2221), JST Moonshot R\&D Grant Number JPMJMS2215.
+This paper is based on results obtained from the project “Research and Development Project of the Enhanced Infrastructures for Post-5G Information and Communication Systems (JPNP20017)” and JPNP16007 commissioned by the New Energy and Industrial Technology Development Organization (NEDO), and from JSPS KAKENHI Grant Number 25H00446, and from JST CREST Grant Number JPMJCR24R4, and from SECOM Science and Technology Foundation, and JST COI-NEXT SQAI (JPMJPF2221), and JST Moonshot R\&D Grant Number JPMJMS2215.
 
 \section*{参考文献}
 \begin{thebibliography}{9}
