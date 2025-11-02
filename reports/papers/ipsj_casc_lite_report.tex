@@ -14,38 +14,46 @@
 
 \maketitle
 
-\section{研究概要}
-本報告は，self-consistency サンプリングを実装した再現環境を用い，算数ベンチマーク GSM8K\cite{Cobbe2021TrainingVT} に対してサンプル数を最大 $n=50$ まで拡張した再現実験の結果をまとめたものである。Self-consistency は Chain-of-Thought 推論を改善する手法として注目されており\cite{Wang2022SelfConsistencyIC}，本研究ではサンプル数の増加が精度・レイテンシ・各種信頼度指標に与える影響を定量的に整理することを目的とする。
+\section{背景}
+Self-consistency は複数の Chain-of-Thought を生成して多数決を取ることで推論精度を高めるが\cite{Wang2022SelfConsistencyIC}、サンプル数の増加に伴い推論時間とコストが増大する。本研究は算数ベンチマーク GSM8K\cite{Cobbe2021TrainingVT} を対象に、最大 $n=50$ までサンプルを伸長した際の精度・レイテンシ・信頼度指標を調査する。
 
-\section{実験構成}
-Meta-Llama-3-8B-Instruct（HF Transformers）を用い，temperature=0.7，top-p=0.9 とした。全 8,792 問に対し固定 $n=50$ の推論を一度行い，得られた 50 本の出力から先頭 $n$ 本のみを切り出して多数決を再計算するポストホック評価を採用した。記録した主な指標はプレフィックスエントロピー，投票マージン，二番手票率，サンプル生成時間である。
+\section{データセットとアルゴリズム}
+GSM8K は 8,792 問の算数文章題からなり，各行に ``{question, answer}'' を持つ JSON Lines 形式で提供される。プロンプトは ``You are a helpful math tutor…'' を使用し，temperature=0.7, top-p=0.9 で $n=50$ の Chain-of-Thought を生成，prefix entropy ($K=8$)，vote margin，runner-up ratio，生成時間を同時に記録した。得られた 50 本の出力を先頭から切り出し，$n=1,3,5,7,10,15,20,30,40,50$ で多数決を再計算するポストホック評価を行った。
 
-\section{主な結果}
+\section{実験設定}
+モデルは Meta-Llama-3-8B-Instruct（HF Transformers, A100 80GB）を使用し，max\_new\_tokens=256, min\_new\_tokens=1 とした。全 8,792 問について 1 回だけ $n=50$ まで生成し，得られたサンプル群を再利用して各指標を算出した。
+
+\section{結果}
 \subsection{精度とレイテンシ}
-表\ref{tab:accuracy}に主要なサンプル数での厳密精度と累積レイテンシを示す。10 サンプルまでは比較的大きな改善が得られるが，20 サンプルを超えると増分は 1--2pt に留まる。加えて，図\ref{fig:accuracy_curve} にサンプル数と精度・レイテンシの関係をグラフで示す。
-
-\begin{table}[h]
-  \centering
-  \caption{ポストホック再集計による精度と累積レイテンシ}
-  \label{tab:accuracy}
-  \begin{tabular}{@{}>{\raggedright\arraybackslash}p{2cm}cc@{}}
-    \toprule
-    サンプル数 $n$ & 精度 & レイテンシ [s] \\
-    \midrule
-    1 & 0.457 & 0.39 \\
-    5 & 0.648 & 1.97 \\
-    10 & 0.735 & 3.94 \\
-    20 & 0.780 & 7.89 \\
-    30 & 0.795 & 11.83 \\
-    50 & 0.810 & 19.72 \\
-    \bottomrule
-  \end{tabular}
-\end{table}
+表\ref{tab:accuracy}に主要なサンプル数での厳密精度と累積レイテンシを示し、図\ref{fig:accuracy_curve} に全体の推移をまとめる。10 サンプルまでは大幅な精度向上が得られる一方、20 サンプル以降は増分が 1--2pt に留まりレイテンシのみが線形に増加する。
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.8\linewidth]{../../figures/n50_batch/accuracy_vs_n50.png}
-  \caption{サンプル数に対する厳密精度（上）とレイテンシ（下）の推移}
+  \begin{minipage}{0.42\linewidth}
+    \centering
+    \small
+    \caption{主要サンプル数の指標}
+    \label{tab:accuracy}
+    \begin{tabular}{@{}p{1.6cm}cc@{}}
+      \toprule
+      $n$ & 精度 & レイテンシ [s] \\
+      \midrule
+      1 & 0.457 & 0.39 \\
+      5 & 0.648 & 1.97 \\
+      10 & 0.735 & 3.94 \\
+      20 & 0.780 & 7.89 \\
+      30 & 0.795 & 11.83 \\
+      50 & 0.810 & 19.72 \\
+      \bottomrule
+    \end{tabular}
+  \end{minipage}
+  \hfill
+  \begin{minipage}{0.52\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{../../figures/n50_batch/accuracy_vs_n50.png}
+    \caption*{Accuracy / Latency vs Sample count}
+  \end{minipage}
+  \caption{self-consistency のサンプル数に対する精度・レイテンシ}
   \label{fig:accuracy_curve}
 \end{figure}
 
@@ -69,13 +77,10 @@ Meta-Llama-3-8B-Instruct（HF Transformers）を用い，temperature=0.7，top-p
 \end{table}
 
 \section{考察と今後の課題}
-サンプル数を増やすほど安定に正解へ収束するが，$n=50$ でも 13.9\% は誤答のままであり，投票マージンが小さい問題に集中している。今後は
-\begin{itemize}
-  \item 投票マージンや二番手票率に基づく動的な打ち切り戦略の設計
-  \item ログ尤度や自己検証プロンプトなど追加指標との統合
-  \item 他データセット（MATH 等）への適用と比較
-\end{itemize}
-を行い，コスト対効果の高い制御ポリシーを検討する。
+サンプル数を増やすほど精度は向上するものの，$n=50$ でも 13.9\% の問題は誤答に留まり，票差が小さいケースで顕著であった。今後は vote margin や二番手票率に基づく動的停止，ログ尤度・自己検証プロンプトとの統合，他データセットでの検証を進め，コスト効率の良い制御ポリシーを設計する。
+
+\section*{謝辞}
+This paper is based on results obtained from the project “Research and Development Project of the Enhanced Infrastructures for Post-5G Information and Communication Systems (JPNP20017)” and JPNP16007 commissioned by the New Energy and Industrial Technology Development Organization (NEDO), and from JSPS KAKENHI Grant Number 25H00446, and from JST CREST Grant Number JPMJCR24R4, and from SECOM Science and Technology Foundation, and JST COI-NEXT SQAI (JPMJPF2221), JST Moonshot R\&D Grant Number JPMJMS2215.
 
 \section*{参考文献}
 \begin{thebibliography}{9}
