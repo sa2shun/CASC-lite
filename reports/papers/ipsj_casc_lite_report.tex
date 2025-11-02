@@ -28,11 +28,11 @@ GSM8K は 8,792 問の算数文章題から構成され、各行が ``question''
 Meta-Llama-3-8B-Instruct を HF Transformers 経由で呼び出し、プロンプト冒頭に “You are a helpful math tutor.” を設定した。生成条件は temperature=0.7, top-p=0.9, $\text{max\_new\_tokens}=256$ とし、各問題で最大 50 本の CoT を逐次生成・canonical 化（最終行の数値抽出・単位除去）した。$n=1,3,5,7,10,15,20,30,40,50$ の各時点で多数決を再集計し、先頭 32 トークンの平均エントロピー、投票マージン、二番手票率、生成時間などの信頼度指標を記録した。
 
 \section{実験設定}
-全問題を 7 シャードに分割し A100 80GB GPU を用いて並列実行した。レイテンシはサンプル数に比例させたポストホック推定値（実際より長め）を用い、厳密一致精度、累積レイテンシ、信頼度指標との相関、追加票による Gain/Loss 統計を算出した。
+全問題を 7 シャードに分割し H100 (80GB) を 8 基並列で使用した。レイテンシはサンプル数に比例させたポストホック推定値（実際より長め）を用い、厳密一致精度、累積レイテンシ、信頼度指標との相関、追加票による Gain/Loss 統計を算出した。
 
 \section{結果}
 \subsection{精度推移}
-表\ref{tab:accuracy} に代表的なサンプル数の精度と推定レイテンシ、図\ref{fig:accuracy} に精度のみの推移を示す。$n=10$ で 73.5\% に到達し、それ以降 $n=50$ まで拡張しても純増は +7.5pt に留まった。一方、各ステップで 120--170 件規模の正答\textrightarrow{}誤答反転が発生し、単純増票だけでは救済できない問題が残る。
+表\ref{tab:accuracy} に代表的なサンプル数の精度と推定レイテンシ、図\ref{fig:accuracy} に精度のみの推移を示す。$n=10$ で 73.5\% に到達し、それ以降 $n=50$ まで拡張しても純増は +7.5pt に留まった。一方、各ステップで 120--170 件規模の正答\textrightarrow{}誤答反転も発生し、単純増票だけでは救済できない問題が残る。
 
 \begin{table}[t]
   \centering
@@ -60,40 +60,30 @@ Meta-Llama-3-8B-Instruct を HF Transformers 経由で呼び出し、プロン�
 \end{figure}
 
 \subsection{信頼度指標と Gain 分析}
-投票マージンは正の相関（$r=0.37$）、二番手票率は負の相関（$r=-0.16$）を示し、prefix エントロピー単独の相関は弱かった。追加票効果をロジスティック回帰で整理した結果を表\ref{tab:confidence_gain} に示す。投票マージン係数が負であることは僅差問題ほど追加票で救済されやすいことを示し、二番手票率が高いほど逆転劣化のリスクが増す。
+投票マージンは正の相関（$r=0.37$）、二番手票率は負の相関（$r=-0.16$）を示し、prefix エントロピー単独の相関は弱かった（表\ref{tab:confidence}）。追加票の挙動を図\ref{fig:gainloss} に示す。中盤から後半にかけても改善件数が劣化件数を上回る一方で、末期でも逆転劣化が一定数残る。
 
 \begin{table}[t]
   \centering
-  \caption{信頼度指標の相関と Gain/Loss 回帰係数}
-  \label{tab:confidence_gain}
-  \begin{tabular}{@{}p{0.46\linewidth}p{0.46\linewidth}@{}}
-    \begin{minipage}{0.46\linewidth}\centering\small
-      \begin{tabular}{@{}lc@{}}
-        \toprule
-        指標 & 相関 \\
-        \midrule
-        投票マージン & $+0.37$ \\
-        二番手票率 & $-0.16$ \\
-        Prefix エントロピー & $+0.08$ \\
-        生成時間 & $-0.10$ \\
-        \bottomrule
-      \end{tabular}
-    \end{minipage}
-    &
-    \begin{minipage}{0.46\linewidth}\centering\small
-      \begin{tabular}{@{}lrrr@{}}
-        \toprule
-        事象 & $\beta_0$ & $\beta_{\mathrm{vm}}$ & $\beta_{\mathrm{sv}}$ \\
-        \midrule
-        gain$_{1\rightarrow50}$ & 0.463 & $-1.650$ & 0.365 \\
-        loss$_{1\rightarrow50}$ & $-5.418$ & $-4.774$ & 9.596 \\
-        gain$_{3\rightarrow50}$ & 0.696 & $-2.880$ & 1.016 \\
-        \bottomrule
-      \end{tabular}\par
-      \vspace{2pt}\footnotesize $\beta_{\mathrm{vm}}$: 投票マージン, $\beta_{\mathrm{sv}}$: 二番手票率
-    \end{minipage}
+  \caption{正答率と主要指標の相関（全 8,792 問）}
+  \label{tab:confidence}
+  \begin{tabular}{@{}p{2.3cm}c@{}}
+    \toprule
+    指標 & 相関係数 \\
+    \midrule
+    投票マージン & $+0.37$ \\
+    二番手票率 & $-0.16$ \\
+    Prefix エントロピー & $+0.08$ \\
+    生成時間 & $-0.10$ \\
+    \bottomrule
   \end{tabular}
 \end{table}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.9\linewidth]{../../figures/n50_batch/gain_loss_per_step.png}
+  \caption{サンプル数増加ごとの改善・劣化件数}
+  \label{fig:gainloss}
+\end{figure}
 
 \section{考察と今後の課題}
 $n=50$ で精度は 80.99\% に達するが、13.9\% は誤答のままで票差が小さい事例が中心だった。投票マージンと二番手票率に基づく動的停止、およびエントロピー系列と自己検証プロンプトを組み合わせた制御による高コスト域の改善が今後の課題である。
