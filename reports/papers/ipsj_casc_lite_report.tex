@@ -1,43 +1,38 @@
-\documentclass[submit]{ipsj}
+\documentclass[twocolumn]{jsarticle}
 
 \usepackage[dvipdfmx]{graphicx}
-\usepackage{amsmath}
 \usepackage{booktabs}
 \usepackage{array}
 \usepackage{url}
+\usepackage{amsmath}
 
-\setlength{\textfloatsep}{8pt}
-\setlength{\floatsep}{6pt}
-\setlength{\intextsep}{6pt}
-\linespread{0.92}
-\addtolength{\textheight}{12mm}
+\setlength{\columnsep}{10mm}
+\setlength{\textfloatsep}{10pt}
+\setlength{\floatsep}{8pt}
+\setlength{\intextsep}{8pt}
 
 \title{GSM8Kにおけるself-consistency投票の高サンプル解析}
-
-\affiliate{SFC}{慶應義塾大学 環境情報学部}
-
-\author{佐々木 駿}{Shun Sasaki}{SFC}[shun.sasaki@keio.jp]
-\author{川島 英之}{Hideyuki Kawashima}{SFC}
+\author{慶應義塾大学 環境情報学部\quad 佐々木 駿・川島 英之\\\texttt{shun.sasaki@keio.jp}}
 
 \begin{document}
 
 \maketitle
 
 \section{背景}
-self-consistency は複数の Chain-of-Thought (CoT) を生成し多数決で回答を決めることで精度を高めるが\cite{Wang2022SelfConsistencyIC}、サンプル数 $n$ の増加に伴い計算コストとレイテンシが膨らむ。算数ベンチマーク GSM8K\cite{Cobbe2021TrainingVT} を題材に $n=50$ まで拡張した際の精度推移と信頼度指標の挙動を整理する。
+self-consistency は複数の Chain-of-Thought (CoT) を生成し多数決で回答を決めることで精度を高めるが\cite{Wang2022SelfConsistencyIC}、サンプル数 $n$ の増加に伴い計算コストとレイテンシが増大する。本稿は算数ベンチマーク GSM8K\cite{Cobbe2021TrainingVT} に対し、$n=50$ まで拡張した際の精度推移および信頼度指標の挙動を整理する。
 
 \section{データセット}
-GSM8K は 8,792 問からなる算数文章題コーパスで、各行が ``question'' と ``answer'' を含む JSON Lines 形式で提供される。全問題が整数解となるため、CoT 推論の計算過程と最終回答の整合性を観察しやすい。
+GSM8K は 8,792 問の算数文章題から構成され、各行が ``question'' と ``answer'' を含む JSON Lines 形式で提供される。全問題が整数解となるため、CoT 推論過程と最終数値回答の整合性を観察しやすい。
 
 \section{アルゴリズム}
-Meta-Llama-3-8B-Instruct を HF Transformers 経由で使用し、プロンプトは “You are a helpful math tutor.” で開始した。temperature=0.7, top-p=0.9, $\text{max\_new\_tokens}=256$ で最大 50 本の CoT を逐次生成し、最終行の数値抽出による canonical 化を行った。$n=1,3,5,7,10,15,20,30,40,50$ 時点で多数決を再集計し、先頭 32 トークンの平均エントロピー、投票マージン、二番手票率、生成時間などの信頼度指標を併記した。
+Meta-Llama-3-8B-Instruct を HF Transformers 経由で呼び出し、プロンプト冒頭に “You are a helpful math tutor.” を設定した。生成条件は temperature=0.7, top-p=0.9, $\text{max\_new\_tokens}=256$ とし、各問題で最大 50 本の CoT を逐次生成・canonical 化（最終行の数値抽出・単位除去）した。$n=1,3,5,7,10,15,20,30,40,50$ の各時点で多数決を再集計し、先頭 32 トークンの平均エントロピー、投票マージン、二番手票率、生成時間などの信頼度指標を記録した。
 
 \section{実験設定}
-データを 7 シャードに分割し A100 80GB GPU で並列実行した。レイテンシはサンプル数へ比例させたポストホック推定値を用い（実際より長め）、厳密一致精度、累積レイテンシ、信頼度相関、追加票による Gain/Loss 統計を算出した。
+全問題を 7 シャードに分割し A100 80GB GPU を用いて並列実行した。レイテンシはサンプル数に比例させたポストホック推定値（実際より長め）を用い、厳密一致精度、累積レイテンシ、信頼度指標との相関、追加票による Gain/Loss 統計を算出した。
 
 \section{結果}
 \subsection{精度推移}
-表\ref{tab:accuracy} は代表的なサンプル数における精度と推定レイテンシ、図\ref{fig:accuracy} は精度のみの推移である。$n=10$ までに 73.5\% に到達し、それ以降は $n=50$ まで拡張しても純増は +7.5pt 程度に留まった。各ステップでは 120--170 件規模の正答→誤答反転も生じ、単純増票だけでは救えない問題が残る。
+表\ref{tab:accuracy} に代表的なサンプル数の精度と推定レイテンシ、図\ref{fig:accuracy} に精度のみの推移を示す。$n=10$ で 73.5\% に到達し、それ以降 $n=50$ まで拡張しても純増は +7.5pt に留まった。一方、各ステップで 120--170 件規模の正答\textrightarrow{}誤答反転が発生し、単純増票だけでは救済できない問題が残る。
 
 \begin{table}[t]
   \centering
@@ -65,13 +60,13 @@ Meta-Llama-3-8B-Instruct を HF Transformers 経由で使用し、プロンプ�
 \end{figure}
 
 \subsection{信頼度指標と Gain 分析}
-投票マージンは正の相関（$r=0.37$）、二番手票率は負の相関（$r=-0.16$）であり、prefix エントロピー単独の相関は弱かった。追加票効果をロジスティック回帰で整理したものが表\ref{tab:confidence_gain} である。投票マージン係数が負であることは僅差問題ほど追加票で救済されやすいことを示し、二番手票率が高いほど逆転劣化の確率が増す。
+投票マージンは正の相関（$r=0.37$）、二番手票率は負の相関（$r=-0.16$）を示し、prefix エントロピー単独の相関は弱かった。追加票効果をロジスティック回帰で整理した結果を表\ref{tab:confidence_gain} に示す。投票マージン係数が負であることは僅差問題ほど追加票で救済されやすいことを示し、二番手票率が高いほど逆転劣化のリスクが増す。
 
 \begin{table}[t]
   \centering
   \caption{信頼度指標の相関と Gain/Loss 回帰係数}
   \label{tab:confidence_gain}
-  \begin{tabular}{@{}cc@{}}
+  \begin{tabular}{@{}p{0.46\linewidth}p{0.46\linewidth}@{}}
     \begin{minipage}{0.46\linewidth}\centering\small
       \begin{tabular}{@{}lc@{}}
         \toprule
@@ -101,7 +96,7 @@ Meta-Llama-3-8B-Instruct を HF Transformers 経由で使用し、プロンプ�
 \end{table}
 
 \section{考察と今後の課題}
-$n=50$ で精度は 80.99\% に達するが、13.9\% の問題は誤答のままで票差が小さい事例が中心だった。投票マージンと二番手票率に基づく動的停止や、エントロピー系列と自己検証プロンプトを組み合わせた制御による高コスト域の改善が今後の課題である。
+$n=50$ で精度は 80.99\% に達するが、13.9\% は誤答のままで票差が小さい事例が中心だった。投票マージンと二番手票率に基づく動的停止、およびエントロピー系列と自己検証プロンプトを組み合わせた制御による高コスト域の改善が今後の課題である。
 
 \section*{謝辞}
 {\footnotesize This research was supported by JPNP20017 and JPNP16007 (NEDO), JSPS KAKENHI 25H00446, JST CREST JPMJCR24R4, SECOM Science and Technology Foundation, JST COI-NEXT SQAI (JPMJPF2221), and JST Moonshot R\&D JPMJMS2215.}
