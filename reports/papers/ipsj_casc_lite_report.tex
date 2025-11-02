@@ -5,38 +5,50 @@
 \usepackage{array}
 \usepackage{url}
 \usepackage{amsmath}
+\usepackage{float}
 
 \setlength{\columnsep}{10mm}
 \setlength{\textfloatsep}{10pt}
 \setlength{\floatsep}{8pt}
 \setlength{\intextsep}{8pt}
 
-\title{GSM8Kにおけるself-consistency投票の高サンプル解析}
-\author{慶應義塾大学 環境情報学部\quad 佐々木 駿・川島 英之\\\texttt{shun.sasaki@keio.jp}}
+\title{GSM8Kにおけるエントロピー適応型self-consistencyサンプリングの分析}
+\author{佐々木 駿・川島 英之\\慶應義塾大学\\\texttt{shun.sasaki@keio.jp, river@sfc.keio.ac.jp}}
 
 \begin{document}
 
 \maketitle
+\fontsize{9.8pt}{11.2pt}\selectfont
 
 \section{背景}
-self-consistency は複数の Chain-of-Thought (CoT) を生成し多数決で回答を決めることで精度を高めるが\cite{Wang2022SelfConsistencyIC}、サンプル数 $n$ の増加に伴い計算コストとレイテンシが増大する。本稿は算数ベンチマーク GSM8K\cite{Cobbe2021TrainingVT} に対し、$n=50$ まで拡張した際の精度推移および信頼度指標の挙動を整理する。
+Chain-of-Thought (CoT) プロンプティングは大規模言語モデルに逐次推論を促し、途中の思考過程を明示的に出力させることで論理的一貫性と正答率の向上を狙う手法である\cite{Wei2022Chain}。自明な例として「太郎はリンゴを3個持ち、花子はその2倍を持つ。合計はいくつか？」という問いに対し、CoTなしでは ``6'' と誤答する一方、``step by stepで考えて'' と指示した CoT では「3＋(2×3)=9」まで明示して正答に到達する。
 
-\section{データセット}
-GSM8K は 8,792 問の算数文章題から構成され、各行が ``question'' と ``answer'' を含む JSON Lines 形式で提供される。全問題が整数解となるため、CoT 推論過程と最終数値回答の整合性を観察しやすい。
-
-\section{アルゴリズム}
-Meta-Llama-3-8B-Instruct を HF Transformers 経由で呼び出し、プロンプト冒頭に “You are a helpful math tutor.” を設定した。生成条件は temperature=0.7, top-p=0.9, $\text{max\_new\_tokens}=256$ とし、各問題で最大 50 本の CoT を逐次生成・canonical 化（最終行の数値抽出・単位除去）した。$n=1,3,5,7,10,15,20,30,40,50$ の各時点で多数決を再集計し、先頭 32 トークンの平均エントロピー、投票マージン、二番手票率、生成時間などの信頼度指標を記録した。
+self-consistency は同一問題に対して CoT を複数回独立生成し、得られた最終回答の多数決を採用する集約法である\cite{Wang2022SelfConsistencyIC}。例えば ``クッキーは1箱12個。3箱買って2個食べた。残りは？'' の問いに対し、$n=3$ の self-consistency は [36, 36, 34] という回答列から 34 を選び、単一サンプル時の手順抜けを補正する。本研究では self-consistency を $n=50$ まで拡張したときの利得とコストを精査する。
 
 \section{実験設定}
-全問題を 7 シャードに分割し H100 (80GB) を 8 基並列で使用した。レイテンシはサンプル数に比例させたポストホック推定値（実際より長め）を用い、厳密一致精度、累積レイテンシ、信頼度指標との相関、追加票による Gain/Loss 統計を算出した。
+\subsection{データセット}
+GSM8K\cite{Cobbe2021TrainingVT} は小学生向け算数文章題 8,792 問からなるデータセットであり、各行が ``question'' と ``answer'' を含む JSON Lines 形式で提供される。例として ``Sarah has 3 apples and buys 2 more. How many apples does she have now?'' に対し正解 ``5'' が付与される。モデル学習は行わず、推論結果の最終数値を抽出して strict accuracy／numerical equivalence で採点した。
 
-\section{結果}
-\subsection{精度推移}
-表\ref{tab:accuracy} に代表的なサンプル数の精度と推定レイテンシ、図\ref{fig:accuracy} に精度のみの推移を示す。$n=10$ で 73.5\% に到達し、それ以降 $n=50$ まで拡張しても純増は +7.5pt に留まった。一方、各ステップで 120--170 件規模の正答\textrightarrow{}誤答反転も発生し、単純増票だけでは救済できない問題が残る。
+\subsection{環境}
+Meta-Llama-3-8B-Instruct を Hugging Face Transformers で実行し、NVIDIA H100 (80GB) を 8 基用いた。推論パラメータは temperature=0.7, top-p=0.9, max\_new\_tokens=256, min\_new\_tokens=1 とし、プロンプト文 ``You are a helpful math tutor. Solve the following problem step by step and provide only the final numeric answer.'' を固定で使用した。
 
-\begin{table}[t]
+\subsection{Self-consistency の設定}
+各問題について $n=50$ サンプルを生成（シード固定）し、得られた 50 本の思考列と最終回答を保存した。先頭 $n\in\{1,3,5,7,10,15,20,30,40,50\}$ に対する多数決をポストホックで再計算し、prefix entropy ($K=8$)、vote margin、second vote ratio、サンプルごとの生成時間、各 $n$ の strict／normalized accuracy を記録した。
+
+\section{分析}
+\subsection{精度とレイテンシ}
+self-consistency を $n=50$ まで拡張すると GSM8K の厳密精度は 45.7\% から 81.0\% へ伸びるが、$n=20$ 以降の増分は小さく、レイテンシが線形に増加する。高コスト帯では一律にサンプルを増やすのではなく、指標に基づく動的制御が不可欠である。図\ref{fig:accuracy} に精度推移を、表\ref{tab:accuracy} に代表サンプル数の厳密精度と推定レイテンシを示す。
+
+\begin{figure}[H]
   \centering
-  \caption{代表サンプル数における精度と推定レイテンシ}
+  \includegraphics[width=0.9\linewidth]{../../figures/n50_batch/accuracy_vs_n50.png}
+  \caption{Self-consistency サンプル数に対する厳密精度の推移}
+  \label{fig:accuracy}
+\end{figure}
+
+\begin{table}[H]
+  \centering
+  \caption{代表サンプル数における厳密精度と推定レイテンシ}
   \label{tab:accuracy}
   \begin{tabular}{@{}lcc@{}}
     \toprule
@@ -52,21 +64,22 @@ Meta-Llama-3-8B-Instruct を HF Transformers 経由で呼び出し、プロン�
   \end{tabular}
 \end{table}
 
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=0.9\linewidth]{../../figures/n50_batch/accuracy_vs_n50.png}
-  \caption{self-consistency サンプル数に対する厳密精度の推移}
-  \label{fig:accuracy}
-\end{figure}
+\subsection{信頼度指標と追加票の挙動}
+先に各指標の定義を整理する。
+\begin{itemize}
+  \item \textbf{投票マージン}: 最多数回答の得票比率。0.5 で拮抗、1.0 で全会一致。
+  \item \textbf{二番手票率}: 準多数回答の得票比率。高いほど票が割れている。
+  \item \textbf{Prefix エントロピー}: 先頭 32 トークンの平均トークンエントロピー。
+  \item \textbf{生成時間}: 50 サンプル生成に要した合計時間。
+\end{itemize}
 
-\subsection{信頼度指標と Gain 分析}
-投票マージンは正の相関（$r=0.37$）、二番手票率は負の相関（$r=-0.16$）を示し、prefix エントロピー単独の相関は弱かった（表\ref{tab:confidence}）。追加票の挙動を図\ref{fig:gainloss} に示す。中盤から後半にかけても改善件数が劣化件数を上回る一方で、末期でも逆転劣化が一定数残る。
+表\ref{tab:confidence} に各指標と最終正答率の相関係数を示す。投票マージンが最も強く結び付き、二番手票率が負の相関を示す一方、prefix エントロピー単体の識別力は限定的である。図\ref{fig:gainloss} ではサンプル数を増やした際の改善・劣化件数を可視化した。中盤以降も改善が優勢だが、僅差領域では逆転劣化が生じ得るためマージンを中心とした動的停止戦略が必要となる。
 
-\begin{table}[t]
+\begin{table}[H]
   \centering
   \caption{正答率と主要指標の相関（全 8,792 問）}
   \label{tab:confidence}
-  \begin{tabular}{@{}p{2.3cm}c@{}}
+  \begin{tabular}{@{}lc@{}}
     \toprule
     指標 & 相関係数 \\
     \midrule
@@ -78,22 +91,25 @@ Meta-Llama-3-8B-Instruct を HF Transformers 経由で呼び出し、プロン�
   \end{tabular}
 \end{table}
 
-\begin{figure}[t]
+\begin{figure}[H]
   \centering
   \includegraphics[width=0.9\linewidth]{../../figures/n50_batch/gain_loss_per_step.png}
-  \caption{サンプル数増加ごとの改善・劣化件数}
+  \caption{サンプル数増加ごとの改善・劣化件数の推移}
   \label{fig:gainloss}
 \end{figure}
 
-\section{考察と今後の課題}
-$n=50$ で精度は 80.99\% に達するが、13.9\% は誤答のままで票差が小さい事例が中心だった。投票マージンと二番手票率に基づく動的停止、およびエントロピー系列と自己検証プロンプトを組み合わせた制御による高コスト域の改善が今後の課題である。
+\section{結論}
+Self-consistency のサンプル数を最大 50 まで拡張すると GSM8K の厳密精度は 45.7\% から 81.0\% へ向上するが、$n=20$ 以降は伸びが鈍化しレイテンシが急増する。投票マージンと二番手票率が最終正答率と最も強く結び付き、prefix エントロピー単体の識別力は限定的である。サンプル生成時間が長い問題ほど誤答が多く、コスト指標と信頼度指標を両立させた動的制御が必要である。
 
-\section*{謝辞}
-{\footnotesize This research was supported by JPNP20017 and JPNP16007 (NEDO), JSPS KAKENHI 25H00446, JST CREST JPMJCR24R4, SECOM Science and Technology Foundation, JST COI-NEXT SQAI (JPMJPF2221), and JST Moonshot R\&D JPMJMS2215.}
+\section*{Acknowledgment}
+{\footnotesize This research was supported by the “Research and Development Project of the Enhanced Infrastructures for Post-5G Information and Communication Systems (JPNP20017)” and JPNP16007, commissioned by the New Energy and Industrial Technology Development Organization (NEDO), JSPS KAKENHI Grant Number 22H03596, JST CREST Grant Number JPMJCR24R4, and the SECOM Science and Technology Foundation.}
 
-\section*{参考文献}
+\section*{展望}
+投票マージンを中心とした多指標統合型の停止戦略を構築し、他データセットでの汎用性検証と実運用時のコスト最適化につなげる。
+
 {\footnotesize
 \begin{thebibliography}{9}
+\bibitem{Wei2022Chain} Wei, J., Wang, X., Schuurmans, D., Bosma, M., Chi, E., Xia, F., Le, Q., Zhou, D.: “Chain of Thought Prompting Elicits Reasoning in Large Language Models,” arXiv:2201.11903, 2022.
 \bibitem{Wang2022SelfConsistencyIC} Wang, X., Wei, J., Schuurmans, D., Le, Q., Chi, E., Zhou, D.: “Self-Consistency Improves Chain of Thought Reasoning in Language Models,” arXiv:2203.11171, 2022.
 \bibitem{Cobbe2021TrainingVT} Cobbe, K., Kosaraju, V., Bavarian, M., Chen, M., Jun, H., Kaiser, L., Plappert, M., Tworek, J., Hilton, J., Nakano, R., Hesse, C., Schulman, J.: “Training Verifiers to Solve Math Word Problems,” arXiv:2110.14168, 2021.
 \end{thebibliography}}
